@@ -51,7 +51,8 @@ public partial class Calculator
     }
 
     public void Backspace() { if (Expr.Length > 0) Expr = Expr[..^1]; HasError = false; }
-    public void Clear()     { History.Clear(); Expr = ""; HasError = false; }
+    public void ClearExpr()    { Expr = ""; HasError = false; }
+    public void ClearHistory() { History.Clear(); }
     public void AppendToExpr(string s)
     {
         if (HasError) { Expr = ""; HasError = false; }

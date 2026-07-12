@@ -128,12 +128,14 @@ public partial class MainWindow : Window
     {
         if (e.Key == Key.Enter)  { e.Handled = true; Calculate(); }
         if (e.Key == Key.Escape) { e.Handled = true; ClearAll(); }
+        if (e.Key == Key.Delete) { e.Handled = true; ClearExpr(); }
     }
 
     private void Window_KeyDown(object s, KeyEventArgs e)
     {
         if (e.Key == Key.Enter)  { e.Handled = true; Calculate(); }
         if (e.Key == Key.Escape) { e.Handled = true; ClearAll(); }
+        if (e.Key == Key.Delete) { e.Handled = true; ClearExpr(); }
     }
 
 
@@ -161,8 +163,9 @@ public partial class MainWindow : Window
         txtExpr.Focus();
     }
 
-    private void ClearAll()     { _c.Clear(); histPanel.Children.Clear(); RefreshDisplay(); }
-    private void ClearHistory() { _c.History.Clear(); histPanel.Children.Clear(); }
+    private void ClearExpr()    { _c.ClearExpr(); RefreshDisplay(); }
+    private void ClearHistory() { _c.ClearHistory(); histPanel.Children.Clear(); RefreshDisplay(); }
+    private void ClearAll()     { _c.ClearExpr(); _c.ClearHistory(); histPanel.Children.Clear(); RefreshDisplay(); }
     private void CopyResult()   { if (!string.IsNullOrEmpty(_c.Expr)) Clipboard.SetText(_c.Expr); }
 
     // ── History ────────────────────────────────────────────────────────────
@@ -304,7 +307,7 @@ public partial class MainWindow : Window
     {
         switch (kind)
         {
-            case "clear":   ClearAll(); return;
+            case "clear":   ClearExpr(); return;
             case "back":    _c.Backspace(); break;
             case "eq":      Calculate(); return;
             case "swap":

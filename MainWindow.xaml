@@ -123,7 +123,7 @@
                                  TextWrapping="Wrap"
                                  PreviewTextInput="txtExpr_PreviewInput"
                                  TextChanged="Expr_Changed"
-                                 KeyDown="Expr_KeyDown"/>
+                                 PreviewKeyDown="Expr_KeyDown"/>
                     </Grid>
                 </Grid>
             </Border>
