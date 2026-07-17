@@ -10,7 +10,8 @@
         KeyDown="Window_KeyDown"
         Loaded="Window_Loaded">
 
-    <Border Background="{DynamicResource CardBg}"
+    <Border x:Name="rootLayout"
+			Background="{DynamicResource CardBg}"
             BorderBrush="{DynamicResource OpBg}"
             BorderThickness="1">
         <Grid>
@@ -113,6 +114,7 @@
                     <Grid Grid.Row="2" Margin="14,0,10,10">
                         <TextBox x:Name="txtExpr"
                                  FontSize="32" FontWeight="Bold"
+								 SizeChanged="txtExpr_SizeChanged"
                                  FontFamily="Segoe UI"
                                  Background="Transparent"
                                  BorderThickness="0"

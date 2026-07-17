@@ -104,7 +104,21 @@ public partial class MainWindow : Window
     // ── Input filtering ────────────────────────────────────────────────────
     private void txtExpr_PreviewInput(object s, TextCompositionEventArgs e)
     {
-        e.Handled = !e.Text.All(c => ValidChars.Contains(c));
+        if (!e.Text.All(c => ValidChars.Contains(c))) { e.Handled = true; return; }
+
+        // Limit individual numbers to 20 digits
+        if (char.IsDigit(e.Text[0]))
+        {
+            var txt = txtExpr.Text;
+            int pos = txtExpr.CaretIndex;
+            int start = pos, end = pos;
+            while (start > 0 && char.IsDigit(txt[start - 1])) start--;
+            while (end < txt.Length && char.IsDigit(txt[end])) end++;
+            if (end - start >= 20) { e.Handled = true; return; }
+        }
+
+        if (e.Text.All(c => "+-*/^%".Contains(c)) && txtExpr.Text.Count(c => "+-*/^%".Contains(c)) >= 15)
+        { e.Handled = true; return; }
     }
 
     private void Expr_Changed(object s, TextChangedEventArgs e)
@@ -122,6 +136,19 @@ public partial class MainWindow : Window
         }
         _c.Expr = txtExpr.Text;
         txtPreview.Text = _c.TryPreview();
+    }
+
+    private void txtExpr_SizeChanged(object s, SizeChangedEventArgs e)
+    {
+        int len = txtExpr.Text.Length;
+        txtExpr.FontSize = len switch
+        {
+            < 10 => 32,
+            < 16 => 26,
+            < 22 => 20,
+            < 30 => 16,
+            _ => 13
+        };
     }
 
     private void Expr_KeyDown(object s, KeyEventArgs e)
@@ -149,6 +176,7 @@ public partial class MainWindow : Window
             : (Brush)Application.Current.Resources["Fg"];
         _suppressTextChange = false;
         txtPreview.Text = _c.HasError ? "" : _c.TryPreview();
+        txtExpr_SizeChanged(this, null!);
     }
 
     // ── Calculation ────────────────────────────────────────────────────────

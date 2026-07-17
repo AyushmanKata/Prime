@@ -60,6 +60,8 @@ public partial class Calculator
     }
     public string TryPreview()
     {
+        if (Expr.Trim().All(c => char.IsDigit(c) || c == '.')) return "";
+
         if (string.IsNullOrWhiteSpace(Expr)) return "";
         try
         {
