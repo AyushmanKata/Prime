@@ -5,7 +5,10 @@
              Startup="App_Startup">
     <Application.Resources>
 
-        <!-- Theme color brushes (updated at runtime) -->
+        <!-- Theme color brushes. Initial values here are just placeholders for
+             the XAML designer — App.xaml.cs (ApplyColors) overwrites every one
+             of these at startup and on every theme change, since swapping
+             theme resource dictionaries via pack URIs proved unreliable. -->
         <SolidColorBrush x:Key="CardBg"    Color="#FFFFFF"/>
         <SolidColorBrush x:Key="HistBg"    Color="#F5F4F8"/>
         <SolidColorBrush x:Key="BtnBg"     Color="#EFEFEF"/>
@@ -72,7 +75,11 @@
             <Setter Property="local:ButtonChrome.PressBrush" Value="#2566C8"/>
         </Style>
 
-        <!-- Icon Button (title bar) -->
+        <!-- Icon Button (title bar). Uses its own inline template rather than
+             CalcButtonTemplate/ButtonChrome above: it's a different shape
+             (square icon, small corner radius, fixed size) with only two
+             color states, so sharing the calc-button template would add
+             more indirection than it saves. -->
         <Style x:Key="IconBtn" TargetType="Button">
             <Setter Property="Background"       Value="Transparent"/>
             <Setter Property="Foreground"       Value="{DynamicResource SubFg}"/>

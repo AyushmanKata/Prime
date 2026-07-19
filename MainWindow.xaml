@@ -10,87 +10,98 @@
         KeyDown="Window_KeyDown"
         Loaded="Window_Loaded">
 
+    <!-- Card-style root border. WindowStyle="None" means Windows draws no chrome
+         at all, so this border + code-behind DWM call (see Window_Loaded) supply
+         the border and rounded corners instead. -->
     <Border x:Name="rootLayout"
-			Background="{DynamicResource CardBg}"
+            Background="{DynamicResource CardBg}"
             BorderBrush="{DynamicResource OpBg}"
             BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
+                <!-- Title bar -->
                 <RowDefinition Height="*"/>
+                <!-- History + display -->
                 <RowDefinition Height="Auto"/>
+                <!-- Button pad -->
             </Grid.RowDefinitions>
 
-            <!-- Title Bar -->
+            <!-- Title Bar: hamburger (left) - mode selector (center) - minimize/close (right) -->
             <Border Grid.Row="0"
                     Background="{DynamicResource TitleBg}"
                     Padding="8,6"
                     MouseLeftButtonDown="TitleBar_Drag">
-				<Grid>
-					<!-- Hamburger pinned left -->
-					<StackPanel HorizontalAlignment="Left"
-								VerticalAlignment="Center"
-								Orientation="Horizontal">
-						<Button x:Name="btnMenu"
-								Style="{StaticResource IconBtn}"
-								Height="30"
-								Click="Menu_Click">
-							<TextBlock Text="&#8801;"
-									   Foreground="{DynamicResource SubFg}"
-									   FontSize="18"
-									   Margin="0,2,0,0"
-									   HorizontalAlignment="Center"
-									   VerticalAlignment="Center"/>
-						</Button>
-					</StackPanel>
+                <Grid>
+                    <!-- Hamburger pinned left -->
+                    <StackPanel HorizontalAlignment="Left"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                        <Button x:Name="btnMenu"
+                                Style="{StaticResource IconBtn}"
+                                Height="30"
+                                Click="Menu_Click">
+                            <TextBlock Text="&#8801;"
+                                       Foreground="{DynamicResource SubFg}"
+                                       FontSize="18"
+                                       Margin="0,2,0,0"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Button>
+                    </StackPanel>
 
-					<!-- Mode selector absolutely centered -->
-					<ComboBox x:Name="cmbMode"
-							  Style="{StaticResource ThemedCombo}"
-							  HorizontalAlignment="Center"
-							  VerticalAlignment="Center"
-							  SelectionChanged="Mode_Changed"
-							  SelectedIndex="0"
-							  MinWidth="120">
-						<ComboBoxItem Content="Basic"/>
-						<ComboBoxItem Content="Advanced"/>
-					</ComboBox>
+                    <!-- Mode selector absolutely centered -->
+                    <ComboBox x:Name="cmbMode"
+                              Style="{StaticResource ThemedCombo}"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Center"
+                              SelectionChanged="Mode_Changed"
+                              SelectedIndex="0"
+                              MinWidth="120">
+                        <ComboBoxItem Content="Basic"/>
+                        <ComboBoxItem Content="Advanced"/>
+                    </ComboBox>
 
-					<!-- Minimize + Close pinned right -->
-					<StackPanel HorizontalAlignment="Right"
-								VerticalAlignment="Center"
-								Orientation="Horizontal">
-						<Button Style="{StaticResource IconBtn}"
-								Click="Minimize_Click">
-							<TextBlock Text="&#8211;"
-									   FontSize="14"
-									   Foreground="{DynamicResource SubFg}"
-									   Margin="0,2,0,0"
-									   HorizontalAlignment="Center"
-									   VerticalAlignment="Center"/>
-						</Button>
-						<Button Style="{StaticResource IconBtn}"
-								Margin="2,0,0,0"
-								Click="Close_Click">
-							<Border Background="#CC3333" CornerRadius="10"
-									Width="18" Height="18">
-								<TextBlock Text="&#10005;" FontSize="9"
-										   Foreground="White"
-										   HorizontalAlignment="Center"
-										   VerticalAlignment="Center"/>
-							</Border>
-						</Button>
-					</StackPanel>
-				</Grid>
+                    <!-- Minimize + Close pinned right -->
+                    <StackPanel HorizontalAlignment="Right"
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal">
+                        <Button Style="{StaticResource IconBtn}"
+                                Click="Minimize_Click">
+                            <TextBlock Text="&#8211;"
+                                       FontSize="14"
+                                       Foreground="{DynamicResource SubFg}"
+                                       Margin="0,2,0,0"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"/>
+                        </Button>
+                        <Button Style="{StaticResource IconBtn}"
+                                Margin="2,0,0,0"
+                                Click="Close_Click">
+                            <Border Background="#CC3333" CornerRadius="10"
+                                    Width="18" Height="18">
+                                <TextBlock Text="&#10005;" FontSize="9"
+                                           Foreground="White"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"/>
+                            </Border>
+                        </Button>
+                    </StackPanel>
+                </Grid>
             </Border>
 
-            <!-- History + Display -->
+            <!-- History + Display: 3 rows so the scrollable history, the dimmed
+                 preview line, and the live input never overlap (they previously
+                 shared one row and clipped each other). -->
             <Border Grid.Row="1" Background="{DynamicResource HistBg}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*"/>
+                        <!-- Scrollable history list -->
                         <RowDefinition Height="Auto"/>
+                        <!-- "= result" preview -->
                         <RowDefinition Height="Auto"/>
+                        <!-- Expression input -->
                     </Grid.RowDefinitions>
 
                     <ScrollViewer x:Name="histScroll"
@@ -101,6 +112,9 @@
                         <StackPanel x:Name="histPanel"/>
                     </ScrollViewer>
 
+                    <!-- Dimmed, right-aligned preview of the result; left blank
+                         for plain numbers and invalid expressions (see
+                         Calculator.TryPreview). -->
                     <TextBlock x:Name="txtPreview"
                                Grid.Row="1"
                                FontSize="22"
@@ -112,9 +126,13 @@
                                Opacity="0.75"/>
 
                     <Grid Grid.Row="2" Margin="14,0,10,10">
+                        <!-- FontSize is adjusted at runtime by txtExpr_SizeChanged
+                             (32px down to 13px as the expression grows) instead
+                             of a fixed MaxHeight, so long expressions shrink to
+                             fit rather than wrap off-screen. -->
                         <TextBox x:Name="txtExpr"
                                  FontSize="32" FontWeight="Bold"
-								 SizeChanged="txtExpr_SizeChanged"
+                                 SizeChanged="txtExpr_SizeChanged"
                                  FontFamily="Segoe UI"
                                  Background="Transparent"
                                  BorderThickness="0"
@@ -130,7 +148,9 @@
                 </Grid>
             </Border>
 
-            <!-- Button Pad -->
+            <!-- Button Pad: populated at runtime by MainWindow.xaml.cs
+                 (BuildButtons) - the grid itself is just a placeholder here
+                 since Basic/Advanced need different button counts and layouts. -->
             <Border Grid.Row="2"
                     Background="{DynamicResource CardBg}"
                     Padding="6,4,6,8">

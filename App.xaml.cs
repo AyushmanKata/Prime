@@ -4,11 +4,29 @@ using Microsoft.Win32;
 
 namespace WinCalc;
 
+/// <summary>
+/// App entry point and theme engine. Colors are pushed into
+/// Application.Resources as SolidColorBrush values at runtime (rather than
+/// swapping theme XAML files via pack URIs, which proved unreliable) — every
+/// themed control binds to these resource keys with DynamicResource so a
+/// theme change repaints the whole UI instantly.
+/// </summary>
 public partial class App : Application
 {
+    /// <summary>
+    /// Named "AppTheme" (not "ThemeMode") to avoid colliding with .NET 10 WPF's
+    /// new built-in Application.ThemeMode property, which caused a CS0108
+    /// "hides inherited member" warning under the previous name.
+    /// </summary>
     public enum AppTheme { Light, Dark, System }
+
     public AppTheme CurrentTheme { get; private set; } = AppTheme.System;
 
+    /// <summary>
+    /// Manual startup (wired via Startup="App_Startup" in App.xaml) instead of
+    /// StartupUri, so any XAML/init exception is caught and shown in a
+    /// MessageBox rather than failing silently.
+    /// </summary>
     private void App_Startup(object sender, StartupEventArgs e)
     {
         try
@@ -26,6 +44,7 @@ public partial class App : Application
         }
     }
 
+    /// <summary>Switches theme and repaints all bound brushes. "System" resolves against the current Windows setting.</summary>
     public void SetTheme(AppTheme mode)
     {
         CurrentTheme = mode;
@@ -34,6 +53,7 @@ public partial class App : Application
         ApplyColors(dark);
     }
 
+    /// <summary>Writes the full light or dark palette into Application.Resources.</summary>
     private void ApplyColors(bool dark)
     {
         if (dark)
@@ -72,12 +92,14 @@ public partial class App : Application
         }
     }
 
+    /// <summary>Parses a hex color and stores it as a SolidColorBrush under the given resource key.</summary>
     private void Set(string key, string hex)
     {
         var color = (Color)ColorConverter.ConvertFromString(hex);
         Resources[key] = new SolidColorBrush(color);
     }
 
+    /// <summary>Reads the Windows "app mode" registry setting. Defaults to light (false) if unreadable, e.g. on older Windows builds.</summary>
     public static bool IsSystemDark()
     {
         try

@@ -9,9 +9,15 @@
     <ApplicationIcon>icon.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- icon.ico -> exe/taskbar icon (via ApplicationIcon above);
+       icon.png -> runtime window icon, loaded in MainWindow.xaml.cs (Window_Loaded). -->
   <ItemGroup>
     <Resource Include="icon.ico"/>
     <Resource Include="icon.png"/>
   </ItemGroup>
+
+  <!-- No PublishSingleFile/SelfContained here by design: those are passed as
+       flags on the publish command (see README) rather than baked into the
+       project, since they only apply to the release/publish step. -->
 
 </Project>
