@@ -7,15 +7,15 @@ using System.Windows.Media;
 namespace WinCalc;
 
 /// <summary>
-/// Code-behind for the calculator window: button-grid construction, input
-/// filtering/validation, keyboard shortcuts, history rendering, and the
-/// title-bar chrome (drag, minimize, close, theme menu).
-/// All calculation state itself lives in <see cref="Calculator"/> (_c) —
-/// this class only translates UI events into calls on it and redraws.
+/// Code-behind for the calculator window: button-grid construction, keyboard
+/// handling, history rendering, and the title-bar chrome (drag, minimize, close,
+/// theme menu). All calculation state and every editing/input rule live in
+/// <see cref="Calculator"/> (_c) — this class only translates UI events into
+/// calls on it and redraws.
 /// </summary>
 public partial class MainWindow : Window
 {
-    /// <summary>Which button layout is currently shown. Replaces an earlier raw string field for type safety.</summary>
+    /// <summary>Which button layout is currently shown.</summary>
     private enum CalcMode { Basic, Advanced }
 
     private readonly Calculator _c = new();
@@ -25,16 +25,14 @@ public partial class MainWindow : Window
     private bool _advancedSwapped;    // Advanced mode has two function layouts, toggled by the ⇄ button
 
     /// <summary>
-    /// Button kinds that simply wrap the current expression as "name(expr)" with
-    /// no other logic (unlike "sq", "inv", "fact", etc., which each need custom
-    /// formatting). The button kind and the ExprParser function name are always
-    /// identical for these, so a HashSet is sufficient — no need for a
-    /// dictionary mapping a key to itself. To add a new single-arg wrapping
-    /// function: add its kind here, add a case in ExprParser.Primary, and add a
-    /// button with that kind to a layout below.
+    /// Button kinds that simply wrap the expression as "name(expr)". The button kind
+    /// and the ExprParser function name are identical, so a set is enough. To add one:
+    /// add its kind here, add a case in ExprParser.Apply, and add a button with that
+    /// kind to a layout below.
     /// </summary>
     private static readonly HashSet<string> WrapFunctionKinds =
     [
+        "sin", "cos", "tan",
         "asin", "acos", "atan",
         "sinh", "cosh", "tanh",
         "asinh", "acosh", "atanh",
@@ -42,14 +40,14 @@ public partial class MainWindow : Window
         "sqrt", "cbrt", "abs",
     ];
 
-    /// <summary>Every character the expression box is allowed to contain. Anything else is rejected in <see cref="txtExpr_PreviewInput"/>.</summary>
+    /// <summary>Every character the expression box may contain ('E' is only for scientific notation such as 1E-05). Anything else is rejected.</summary>
     private static readonly HashSet<char> ValidChars =
-        [.. "0123456789.+-*/×÷−%^() πe"];
+        [.. "0123456789.+-*/×÷−%^()!πeE "];
 
     // ── DWM rounded corners ────────────────────────────────────────────────
-    // WindowStyle="None" gives a borderless window with no OS-drawn corners,
-    // so Windows 11's native rounded-corner look is requested explicitly here
-    // via DWM rather than faked with transparency (which previously caused an
+    // WindowStyle="None" gives a borderless window with no OS-drawn corners, so
+    // Windows 11's native rounded-corner look is requested explicitly via DWM
+    // rather than faked with transparency (which previously caused an
     // invisible-window bug — see AllowsTransparency note in PLAN.md).
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr,
@@ -60,17 +58,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-
-        // Deferred to run after InitializeComponent fully completes: building
-        // the button grid touches btnGrid, and the mode ComboBox's initial
-        // SelectionChanged can fire *during* InitializeComponent (before
-        // btnGrid exists). Mode_Changed guards against that with a null check;
-        // this defers the first real build until the window is safely ready.
-        Dispatcher.BeginInvoke(() =>
-        {
-            try { BuildButtons(); txtExpr.Focus(); }
-            catch (Exception ex) { MessageBox.Show($"Build error:\n{ex.Message}", "Error"); }
-        });
+        // Mode_Changed ignores the ComboBox's initial SelectionChanged (it fires inside
+        // InitializeComponent, before btnGrid exists), so the first build happens here.
+        BuildButtons();
     }
 
     private void Window_Loaded(object s, RoutedEventArgs e)
@@ -79,10 +69,8 @@ public partial class MainWindow : Window
         int pref = DWMWCP_ROUND;
         DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
 
-        Icon = new System.Windows.Media.Imaging.BitmapImage(
-            new Uri("pack://application:,,,/icon.png"));
         Activate();
-        Focus();
+        txtExpr.Focus();
     }
 
     // ── Title bar ──────────────────────────────────────────────────────────
@@ -100,7 +88,7 @@ public partial class MainWindow : Window
     private void Menu_Click(object s, RoutedEventArgs e)
     {
         var cm = new ContextMenu();
-        cm.Items.Add(MkItem("☀  Light",         () => _app.SetTheme(App.AppTheme.Light)));
+        cm.Items.Add(MkItem("☀  Light",          () => _app.SetTheme(App.AppTheme.Light)));
         cm.Items.Add(MkItem("🌙  Dark",           () => _app.SetTheme(App.AppTheme.Dark)));
         cm.Items.Add(MkItem("⚙  System Default", () => _app.SetTheme(App.AppTheme.System)));
         cm.Items.Add(new Separator());
@@ -111,7 +99,7 @@ public partial class MainWindow : Window
         cm.IsOpen = true;
     }
 
-    /// <summary>Small helper to build a MenuItem with a click action inline, avoiding a named handler per menu entry.</summary>
+    /// <summary>Builds a MenuItem with an inline click action, avoiding a named handler per entry.</summary>
     private static MenuItem MkItem(string header, Action action)
     {
         var item = new MenuItem { Header = header };
@@ -119,53 +107,48 @@ public partial class MainWindow : Window
         return item;
     }
 
-    /// <summary>Rebuilds the button grid for the newly selected mode (Basic/Advanced), resetting any function-layout swap.</summary>
+    /// <summary>Rebuilds the button grid for the newly selected mode, resetting any function-layout swap.</summary>
     private void Mode_Changed(object s, SelectionChangedEventArgs e)
     {
         if (btnGrid == null) return; // fires once during InitializeComponent, before the grid exists — ignore
-        if (cmbMode.SelectedItem is ComboBoxItem item)
-        {
-            _mode = item.Content.ToString() == "Advanced" ? CalcMode.Advanced : CalcMode.Basic;
-            _advancedSwapped = false;
-            BuildButtons();
-        }
+        _mode = ((ComboBox)s).SelectedIndex == 1 ? CalcMode.Advanced : CalcMode.Basic;
+        _advancedSwapped = false;
+        BuildButtons();
     }
 
     // ── Input filtering ────────────────────────────────────────────────────
 
-    /// <summary>Rejects disallowed characters as they're typed, and enforces the per-number digit cap and per-expression operator cap.</summary>
+    /// <summary>
+    /// Rejects disallowed characters as they're typed and applies the shared limits in
+    /// <see cref="Calculator.AllowsInput"/>. Typing a digit/constant/"(" while a result
+    /// is showing starts a fresh expression, exactly like the on-screen buttons.
+    /// </summary>
     private void txtExpr_PreviewInput(object s, TextCompositionEventArgs e)
     {
-        if (!e.Text.All(c => ValidChars.Contains(c))) { e.Handled = true; return; }
+        if (e.Text.Length == 0 || !e.Text.All(ValidChars.Contains)) { e.Handled = true; return; }
 
-        // Cap each individual number at 20 digits: find the contiguous digit
-        // run the caret sits inside/next to and block once it's long enough.
-        if (char.IsDigit(e.Text[0]))
-        {
-            var txt = txtExpr.Text;
-            int pos = txtExpr.CaretIndex;
-            int start = pos, end = pos;
-            while (start > 0 && char.IsDigit(txt[start - 1])) start--;
-            while (end < txt.Length && char.IsDigit(txt[end])) end++;
-            if (end - start >= 20) { e.Handled = true; return; }
-        }
+        if (_c.ResultShown && Calculator.StartsOperand(e.Text[0]))
+            txtExpr.Clear(); // TextChanged fires synchronously and resets _c.ResultShown
 
-        // Cap the whole expression at 15 operators to prevent runaway length.
-        if (e.Text.All(c => "+-*/^%".Contains(c)) && txtExpr.Text.Count(c => "+-*/^%".Contains(c)) >= 15)
-        { e.Handled = true; return; }
+        // Check limits against the text as it will be once any selection is replaced.
+        var text = txtExpr.Text;
+        int caret = txtExpr.SelectionStart;
+        if (txtExpr.SelectionLength > 0) text = text.Remove(caret, txtExpr.SelectionLength);
+
+        if (!Calculator.AllowsInput(text, caret, e.Text)) e.Handled = true;
     }
 
     /// <summary>
-    /// Keeps txtExpr's text and the underlying Calculator in sync. Also acts as
-    /// a second line of defense against invalid characters (e.g. pasted text,
-    /// which bypasses PreviewTextInput) by stripping anything not in
-    /// ValidChars and preserving caret position.
+    /// Keeps txtExpr and the Calculator in sync. Also the second line of defense
+    /// against invalid characters (pasted text bypasses PreviewTextInput): strips
+    /// anything not in ValidChars while preserving the caret.
     /// </summary>
     private void Expr_Changed(object s, TextChangedEventArgs e)
     {
         if (_suppressTextChange) return;
+
         var raw      = txtExpr.Text;
-        var filtered = new string(raw.Where(c => ValidChars.Contains(c)).ToArray());
+        var filtered = new string(raw.Where(ValidChars.Contains).ToArray());
         if (filtered != raw)
         {
             _suppressTextChange = true;
@@ -174,11 +157,14 @@ public partial class MainWindow : Window
             txtExpr.CaretIndex = Math.Min(caret, filtered.Length);
             _suppressTextChange = false;
         }
-        _c.Expr = txtExpr.Text;
+
+        _c.Expr = txtExpr.Text; // also clears any error state
+        txtExpr.SetResourceReference(TextBox.ForegroundProperty, "Fg");
         txtPreview.Text = _c.TryPreview();
+        UpdateExprFontSize();
     }
 
-    /// <summary>Shrinks the expression font as it grows, keeping long expressions on screen without a fixed max height.</summary>
+    /// <summary>Shrinks the expression font as it grows so long expressions stay on screen.</summary>
     private void UpdateExprFontSize()
     {
         int len = txtExpr.Text.Length;
@@ -192,8 +178,6 @@ public partial class MainWindow : Window
         };
     }
 
-    private void txtExpr_SizeChanged(object s, SizeChangedEventArgs e) => UpdateExprFontSize();
-
     /// <summary>Enter = calculate, Escape = clear everything, Delete = clear expression only.</summary>
     private void HandleShortcutKeys(KeyEventArgs e)
     {
@@ -202,97 +186,108 @@ public partial class MainWindow : Window
         if (e.Key == Key.Delete) { e.Handled = true; ClearExpr(); }
     }
 
-    // Wired to txtExpr's PreviewKeyDown in XAML: TextBox consumes Delete
-    // before a plain KeyDown would ever see it, so tunneling (Preview) is
-    // required here specifically for the Delete-clears-expression shortcut.
+    // Wired to txtExpr's PreviewKeyDown in XAML: TextBox consumes Delete before a
+    // plain KeyDown would see it, so tunneling (Preview) is required for that shortcut.
     private void Expr_KeyDown(object s, KeyEventArgs e) => HandleShortcutKeys(e);
 
-    // Wired to the Window's bubbling KeyDown in XAML: catches the same
-    // shortcuts when focus is on some other control (e.g. the mode
-    // ComboBox) rather than the expression box.
+    // Wired to the Window's bubbling KeyDown: catches the same shortcuts when focus
+    // is on another control (e.g. the mode ComboBox).
     private void Window_KeyDown(object s, KeyEventArgs e) => HandleShortcutKeys(e);
 
-    /// <summary>Repaints the expression box, error color, live preview, and font size from current Calculator state.</summary>
+    /// <summary>
+    /// Repaints the expression box, error color, live preview and font size from
+    /// Calculator state. The foreground is set as a resource *reference* (not a
+    /// brush value) so it keeps following theme changes.
+    /// </summary>
     private void RefreshDisplay()
     {
         _suppressTextChange = true;
         txtExpr.Text = _c.Expr;
         txtExpr.CaretIndex = txtExpr.Text.Length;
-        txtExpr.Foreground = _c.HasError
-            ? (Brush)Application.Current.Resources["WarnFg"]
-            : (Brush)Application.Current.Resources["Fg"];
         _suppressTextChange = false;
+
+        txtExpr.SetResourceReference(TextBox.ForegroundProperty, _c.HasError ? "WarnFg" : "Fg");
         txtPreview.Text = _c.HasError ? "" : _c.TryPreview();
         UpdateExprFontSize();
     }
 
     // ── Calculation ────────────────────────────────────────────────────────
+
     private void Calculate()
     {
         if (string.IsNullOrWhiteSpace(_c.Expr)) return;
-        var before = _c.Expr;
+
+        var before = _c.Expr.Trim();
+        int historyCount = _c.History.Count;
         var result = _c.Evaluate();
-        if (result == "Error") { RefreshDisplay(); return; }
-        AddHistoryRow(before, result);
+
+        // Evaluate skips history when nothing changed (e.g. "5" -> "5"), and on error.
+        if (_c.History.Count > historyCount) AddHistoryRow(before, result);
+
         RefreshDisplay();
         txtExpr.Focus();
     }
 
     private void ClearExpr()    { _c.ClearExpr(); RefreshDisplay(); }
     private void ClearHistory() { _c.ClearHistory(); histPanel.Children.Clear(); RefreshDisplay(); }
-    private void ClearAll()     { _c.ClearExpr(); _c.ClearHistory(); histPanel.Children.Clear(); RefreshDisplay(); }
-    private void CopyResult()   { if (!string.IsNullOrEmpty(_c.Expr)) Clipboard.SetText(_c.Expr); }
+    private void ClearAll()     { _c.ClearExpr(); ClearHistory(); }
+
+    /// <summary>Copies the live preview result if there is one, otherwise the current expression/result.</summary>
+    private void CopyResult()
+    {
+        var text = txtPreview.Text.StartsWith("= ") ? txtPreview.Text[2..] : _c.Expr;
+        if (string.IsNullOrEmpty(text)) return;
+        try { Clipboard.SetText(text); }
+        catch (COMException) { /* clipboard briefly locked by another app; nothing useful to do */ }
+    }
 
     // ── History ────────────────────────────────────────────────────────────
 
-    /// <summary>Adds one clickable "expr = result" row to the history panel; clicking it restores the result into the input.</summary>
+    /// <summary>
+    /// Adds one clickable "expr = result" row; clicking restores the result into the
+    /// input. Colors are resource references, so existing rows repaint on theme change.
+    /// </summary>
     private void AddHistoryRow(string expr, string result)
     {
-        var subFg = (Brush)Application.Current.Resources["SubFg"];
-        var fg    = (Brush)Application.Current.Resources["Fg"];
-        var line  = (Brush)Application.Current.Resources["HistLine"];
+        var sep = new Border { Height = 1, Margin = new Thickness(0, 0, 0, 1) };
+        sep.SetResourceReference(Border.BackgroundProperty, "HistLine");
+        histPanel.Children.Add(sep);
 
-        histPanel.Children.Add(new Border
-            { Height = 1, Background = line, Margin = new Thickness(0,0,0,1) });
-
-        var row = new Grid { Margin = new Thickness(0,1,0,1), Cursor = Cursors.Hand };
+        var row = new Grid { Margin = new Thickness(0, 1, 0, 1), Cursor = Cursors.Hand, Background = Brushes.Transparent };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
-        var t1 = new TextBlock { Text = expr,   Foreground = subFg, FontSize = 14,
-                                 TextTrimming = TextTrimming.CharacterEllipsis };
-        var t2 = new TextBlock { Text = " = ",  Foreground = subFg, FontSize = 14,
-                                 Margin = new Thickness(4,0,4,0) };
-        var t3 = new TextBlock { Text = result, Foreground = fg,    FontSize = 14,
-                                 FontWeight = FontWeights.Bold };
+        var t1 = HistoryText(expr,   "SubFg");
+        var t2 = HistoryText(" = ",  "SubFg", margin: new Thickness(4, 0, 4, 0));
+        var t3 = HistoryText(result, "Fg", FontWeights.Bold);
+        Grid.SetColumn(t1, 0);
+        Grid.SetColumn(t2, 1);
+        Grid.SetColumn(t3, 2);
+        row.Children.Add(t1);
+        row.Children.Add(t2);
+        row.Children.Add(t3);
 
-        t1.SetValue(Grid.ColumnProperty, 0);
-        t2.SetValue(Grid.ColumnProperty, 1);
-        t3.SetValue(Grid.ColumnProperty, 2);
-        row.Children.Add(t1); row.Children.Add(t2); row.Children.Add(t3);
-        row.MouseLeftButtonDown += (_, _) => { _c.Expr = result; RefreshDisplay(); };
+        row.MouseLeftButtonDown += (_, _) => { _c.Expr = result; RefreshDisplay(); txtExpr.Focus(); };
 
         histPanel.Children.Add(row);
         histScroll.ScrollToBottom();
     }
 
-    // ── Button Grid ────────────────────────────────────────────────────────
-
-    /// <summary>Clears and rebuilds the whole button grid for the current mode/layout.</summary>
-    private void BuildButtons()
+    private static TextBlock HistoryText(string text, string brushKey,
+        FontWeight? weight = null, Thickness? margin = null)
     {
-        if (btnGrid == null) return;
-        btnGrid.Children.Clear();
-        btnGrid.RowDefinitions.Clear();
-        btnGrid.ColumnDefinitions.Clear();
-        if (_mode == CalcMode.Advanced) BuildAdvanced();
-        else                            BuildBasic();
+        var t = new TextBlock { Text = text, FontSize = 14, TextTrimming = TextTrimming.CharacterEllipsis };
+        t.SetResourceReference(TextBlock.ForegroundProperty, brushKey);
+        if (weight is { } w) t.FontWeight = w;
+        if (margin is { } m) t.Margin = m;
+        return t;
     }
 
-    // Layouts are declared as (Label, Kind)[][] — one array per row — and
-    // placed into the Grid by PlaceLayout below. This avoids hand-writing
-    // near-duplicate XAML for Basic vs Advanced vs the swapped Advanced grid.
+    // ── Button Grid ────────────────────────────────────────────────────────
+
+    // Layouts are (Label, Kind)[][] — one array per row — placed by PlaceLayout, which
+    // avoids near-duplicate XAML for Basic vs Advanced vs the swapped Advanced grid.
     private static readonly (string L, string K)[][] BasicLayout =
     [
         [("C","clear"),  ("( )","paren"), ("%","percent"), ("⌫","back") ],
@@ -305,47 +300,46 @@ public partial class MainWindow : Window
     // Primary Advanced layout (direct trig, ln/log, 1/x, x², xʸ, |x|).
     private static readonly (string L, string K)[][] AdvancedLayout =
     [
-        [("⇄","swap"),  ("●Deg", "rad"), ("√","sqrt"),  ("C","clear"),   ("( )","paren"), ("%","percent"), ("⌫","back")],
-        [("sin","fn"),  ("cos","fn"),  ("tan","fn"),  ("7","num"),     ("8","num"),     ("9","num"),     ("÷","op")],
-        [("ln","ln"),   ("log","log"), ("1/x","inv"), ("4","num"),     ("5","num"),     ("6","num"),     ("×","op")],
-        [("eˣ","exp"),  ("x²","sq"),   ("xʸ","pow"),  ("1","num"),     ("2","num"),     ("3","num"),     ("−","op")],
-        [("|x|","abs"), ("π","pi"),    ("e","euler"), ("0","num"),     (".","num"),     ("=","eq"),      ("+","op")],
+        [("⇄","swap"), ("●Deg","rad"), ("√","sqrt"),  ("C","clear"), ("( )","paren"), ("%","percent"), ("⌫","back")],
+        [("sin","sin"), ("cos","cos"), ("tan","tan"), ("7","num"),   ("8","num"),     ("9","num"),     ("÷","op")],
+        [("ln","ln"),   ("log","log"), ("1/x","inv"), ("4","num"),   ("5","num"),     ("6","num"),     ("×","op")],
+        [("eˣ","exp"),  ("x²","sq"),   ("xʸ","pow"),  ("1","num"),   ("2","num"),     ("3","num"),     ("−","op")],
+        [("|x|","abs"), ("π","pi"),    ("e","euler"), ("0","num"),   (".","num"),     ("=","eq"),      ("+","op")],
     ];
 
     // Swapped Advanced layout, toggled via ⇄ (inverse/hyperbolic trig, ³√, 2ˣ, x³, x!).
-    // Digit/operator columns are kept identical to AdvancedLayout so the grid
-    // doesn't visually jump when swapping.
+    // Digit/operator columns match AdvancedLayout so the grid doesn't jump when swapping.
     private static readonly (string L, string K)[][] AdvancedLayout2 =
     [
-        [("⇄","swap"), ("●Deg", "rad"),    ("³√","cbrt"),    ("C","clear"),  ("( )","paren"), ("%","percent"), ("⌫","back")],
-        [("sin⁻¹","asin"),  ("cos⁻¹","acos"), ("tan⁻¹","atan"), ("7","num"),   ("8","num"),     ("9","num"),     ("÷","op")],
-        [("sinh","sinh"),    ("cosh","cosh"),  ("tanh","tanh"),  ("4","num"),   ("5","num"),     ("6","num"),     ("×","op")],
-        [("sinh⁻¹","asinh"),("cosh⁻¹","acosh"),("tanh⁻¹","atanh"),("1","num"), ("2","num"),     ("3","num"),     ("−","op")],
-        [("2ˣ","pow2"),     ("x³","cube"),    ("x!","fact"),    ("0","num"),     (".","num"),     ("=","eq"),      ("+","op")],
+        [("⇄","swap"),      ("●Deg","rad"),      ("³√","cbrt"),       ("C","clear"), ("( )","paren"), ("%","percent"), ("⌫","back")],
+        [("sin⁻¹","asin"),  ("cos⁻¹","acos"),    ("tan⁻¹","atan"),    ("7","num"),   ("8","num"),     ("9","num"),     ("÷","op")],
+        [("sinh","sinh"),   ("cosh","cosh"),     ("tanh","tanh"),     ("4","num"),   ("5","num"),     ("6","num"),     ("×","op")],
+        [("sinh⁻¹","asinh"),("cosh⁻¹","acosh"),  ("tanh⁻¹","atanh"),  ("1","num"),   ("2","num"),     ("3","num"),     ("−","op")],
+        [("2ˣ","pow2"),     ("x³","cube"),       ("x!","fact"),       ("0","num"),   (".","num"),     ("=","eq"),      ("+","op")],
     ];
 
-    private void BuildBasic() => PlaceLayout(BasicLayout, 4, 5, 54);
-
-    private void BuildAdvanced()
+    /// <summary>Clears and rebuilds the whole button grid for the current mode/layout.</summary>
+    private void BuildButtons()
     {
-        var layout = _advancedSwapped ? AdvancedLayout2 : AdvancedLayout;
-        PlaceLayout(layout, 7, 5, 52);
+        btnGrid.Children.Clear();
+        btnGrid.RowDefinitions.Clear();
+        btnGrid.ColumnDefinitions.Clear();
+
+        if (_mode == CalcMode.Advanced) PlaceLayout(_advancedSwapped ? AdvancedLayout2 : AdvancedLayout, 52);
+        else                            PlaceLayout(BasicLayout, 54);
+
+        UpdateRadButton(); // layouts hard-code "●Deg"; re-sync the label with the real angle mode
     }
 
-    /// <summary>Creates equal-width columns and fixed-height rows for the button grid.</summary>
-    private void SetupGrid(int cols, int rows, double rowH)
+    /// <summary>Creates equal-width columns and fixed-height rows sized from the layout, then places one button per cell.</summary>
+    private void PlaceLayout((string L, string K)[][] layout, double rowH)
     {
+        int cols = layout.Max(r => r.Length);
         for (int i = 0; i < cols; i++)
-            btnGrid.ColumnDefinitions.Add(new ColumnDefinition
-                { Width = new GridLength(1, GridUnitType.Star) });
-        for (int i = 0; i < rows; i++)
+            btnGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (int i = 0; i < layout.Length; i++)
             btnGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(rowH) });
-    }
 
-    /// <summary>Lays out a (Label, Kind)[][] grid definition into btnGrid, skipping any blank/"skip" cells.</summary>
-    private void PlaceLayout((string L, string K)[][] layout, int cols, int rows, double rowH)
-    {
-        SetupGrid(cols, rows, rowH);
         for (int r = 0; r < layout.Length; r++)
         for (int c = 0; c < layout[r].Length; c++)
         {
@@ -353,8 +347,8 @@ public partial class MainWindow : Window
             if (string.IsNullOrEmpty(label) || kind == "skip") continue;
 
             var btn = MakeBtn(label, kind);
-            btn.SetValue(Grid.RowProperty, r);
-            btn.SetValue(Grid.ColumnProperty, c);
+            Grid.SetRow(btn, r);
+            Grid.SetColumn(btn, c);
             btnGrid.Children.Add(btn);
         }
     }
@@ -364,16 +358,15 @@ public partial class MainWindow : Window
     {
         var styleKey = kind switch
         {
-            "eq"                                   => "EqBtn",
+            "eq"                                              => "EqBtn",
             "op" or "percent" or "paren" or "clear" or "back" => "OpBtn",
-            _                                      => "Btn"
+            _                                                 => "Btn"
         };
         var btn = new Button
         {
-            Content  = label,
-            Tag      = kind,
-            Style    = (Style)Application.Current.Resources[styleKey],
-            Cursor   = Cursors.Hand
+            Content = label,
+            Tag     = kind,
+            Style   = (Style)Application.Current.Resources[styleKey],
         };
         btn.Click += (_, _) => HandleBtn(label, kind);
         return btn;
@@ -399,54 +392,41 @@ public partial class MainWindow : Window
     {
         switch (kind)
         {
-            case "clear": ClearExpr(); return;
+            case "clear": _c.ClearExpr(); break;
             case "back":  _c.Backspace(); break;
-            case "eq":    Calculate(); return;
+            case "eq":    Calculate();    break;
 
             case "swap": // toggle between AdvancedLayout and AdvancedLayout2
                 _advancedSwapped = !_advancedSwapped;
                 BuildButtons();
-                return;
+                break;
 
             case "rad": // toggle degrees/radians for trig functions
                 _c.UseRadians = !_c.UseRadians;
                 UpdateRadButton();
-                return;
-
-            case "num": _c.AppendToExpr(label); break;
-            case "op":  _c.AppendToExpr(" " + label + " "); break;
-            case "percent": _c.AppendToExpr("%"); break;
-
-            case "paren": // auto-pick '(' or ')' based on how many are currently open
-                int o = _c.Expr.Count(ch => ch == '(');
-                int cl = _c.Expr.Count(ch => ch == ')');
-                _c.AppendToExpr(o > cl ? ")" : "(");
                 break;
 
-            case "fn": // sin/cos/tan: wrap the whole current expression as an argument
-                _c.Expr = $"{label}({_c.Expr})";
-                break;
+            case "num":     _c.TryAppend(label);                  break;
+            case "op":      _c.AppendOperator(label);             break;
+            case "pow":     _c.AppendOperator("^", spaced: false); break;
+            case "percent": _c.AppendPercent();                   break;
+            case "paren":   _c.AppendParen();                     break;
+            case "pi":      _c.TryAppend("π");                    break;
+            case "euler":   _c.TryAppend("e");                    break;
 
-            case "inv":  if (!string.IsNullOrEmpty(_c.Expr)) _c.Expr = $"1/({_c.Expr})";  break;
-            case "sq":   if (!string.IsNullOrEmpty(_c.Expr)) _c.Expr = $"({_c.Expr})^2";  break;
-            case "cube": if (!string.IsNullOrEmpty(_c.Expr)) _c.Expr = $"({_c.Expr})^3";  break;
-            case "pow2": if (!string.IsNullOrEmpty(_c.Expr)) _c.Expr = $"2^({_c.Expr})";  break;
-            case "pow":  _c.AppendToExpr("^"); break;
-
-            case "fact": // in-place integer factorial, 0–20 only (beyond 20! overflows long)
-                if (long.TryParse(_c.Expr, out long n) && n >= 0 && n <= 20)
-                { long f = 1; for (long i = 2; i <= n; i++) f *= i; _c.Expr = f.ToString(); }
-                break;
-
-            case "pi":    _c.AppendToExpr("π"); break;
-            case "euler": _c.AppendToExpr("e"); break;
+            // Rewrite the whole expression around itself; parentheses only when needed.
+            case "inv":  _c.ApplyToExpr("1/{0}");  break;
+            case "sq":   _c.ApplyToExpr("{0}^2");  break;
+            case "cube": _c.ApplyToExpr("{0}^3");  break;
+            case "pow2": _c.ApplyToExpr("2^{0}");  break;
+            case "fact": _c.ApplyToExpr("{0}!");   break;
 
             default:
-                // Simple single-arg wrapping functions (asin, ln, sqrt, ...) — see WrapFunctionKinds.
-                if (WrapFunctionKinds.Contains(kind))
-                    _c.Expr = $"{kind}({_c.Expr})";
+                // sin, cos, ln, sqrt, ... — see WrapFunctionKinds.
+                if (WrapFunctionKinds.Contains(kind)) _c.WrapFunction(kind);
                 break;
         }
+
         RefreshDisplay();
         txtExpr.Focus();
         txtExpr.CaretIndex = txtExpr.Text.Length;

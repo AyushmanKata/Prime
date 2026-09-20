@@ -1,7 +1,7 @@
 # WinCalc
 
 A fast, native Windows calculator styled after GNOME Calculator.
-Built with C# + WPF on .NET 10. Instant startup, tiny binary, no runtime required.
+Built with C# + WPF on .NET 10. Native, no Electron. The published exe is self-contained, so no .NET install is needed to run it.
 
 ## Requirements
 
@@ -30,11 +30,12 @@ Output: `bin/Release/net10.0-windows/win-x64/publish/WinCalc.exe`
 | **Theme** | Light / Dark / System Default (reads Windows registry) |
 | **History** | Scrollable; click any entry to restore that result |
 | **Keyboard** | Full keyboard input · Enter to evaluate · Backspace to delete · Delete to clear · Esc to clear all |
-| **Operators** | `+` `−` `×` `÷` `%` `^` `( )` |
+| **Operators** | `+` `−` `×` `÷` `%` `^` `!` `( )` · implicit multiplication (`2π`, `2(3+4)`, `(1+2)(3+4)`) |
+| **Percent** | `50%` = 0.5 · after `+`/`−` it is a percent *of the left side* (`200 + 10%` = 220) · `10 % 3` (a value after `%`) is modulo |
 | **Functions** | `sin` `cos` `tan` `sin⁻¹` `cos⁻¹` `tan⁻¹` `sinh` `cosh` `tanh` `sinh⁻¹` `cosh⁻¹` `tanh⁻¹` `ln` `log` `eˣ` `2ˣ` `x²` `x³` `xʸ` `√` `³√` `1/x` `\|x\|` `x!` `π` `e` |
 | **Rad / Deg** | Toggle in Advanced mode; applies to all trig functions |
-| **Input guard** | Max 20 digits per number · Max 15 operators per expression · Dynamic font scaling |
-| **Extras** | Copy result · Clear expression (C) · Clear history (≡ menu) · Minimize fade animation |
+| **Input guard** | Max 20 digits per number · One decimal point per number · Max 15 operators per expression · Dynamic font scaling · Same rules for keyboard and on-screen buttons |
+| **Extras** | Copy result · Clear expression (C) · Clear history (≡ menu) · Follows the Windows light/dark setting live in System Default |
 
 ## Theme Switching
 
@@ -60,8 +61,9 @@ WinCalc/
 
 ```
 AddSub  := MulDiv (('+' | '-') MulDiv)*
-MulDiv  := Power (('*' | '/' | '%') Power)*
-Power   := Unary ('^' Power)?        # right-associative
-Unary   := ('-' | '+')? Primary
+MulDiv  := Unary (('*' | '/' | '%') Unary)*
+Unary   := ('-' | '+') Unary | Power           # -2^2 = -4
+Power   := Postfix ('^' Unary)?                # right-associative: 2^3^2 = 2^9
+Postfix := Primary ('!' | '%')*                # '%' = percent unless an operand follows
 Primary := NUMBER | 'π' | 'e' | '(' AddSub ')' | FUNC '(' AddSub ')'
 ```

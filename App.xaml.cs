@@ -32,6 +32,7 @@ public partial class App : Application
         try
         {
             SetTheme(AppTheme.System);
+            SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
             var window = new MainWindow();
             window.Show();
             window.Activate();
@@ -42,6 +43,22 @@ public partial class App : Application
                             "Calculator Error", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown();
         }
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
+        base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Follows the Windows light/dark setting live while "System Default" is selected.
+    /// SystemEvents raises this on its own thread, so the repaint is marshalled to the UI thread.
+    /// </summary>
+    private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != UserPreferenceCategory.General || CurrentTheme != AppTheme.System) return;
+        Dispatcher.BeginInvoke(() => SetTheme(AppTheme.System));
     }
 
     /// <summary>Switches theme and repaints all bound brushes. "System" resolves against the current Windows setting.</summary>

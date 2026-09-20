@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Calculator"
+        Icon="icon.png"
         WindowStyle="None"
         ResizeMode="NoResize"
         Width="380" Height="620"
@@ -40,6 +41,7 @@
                         <Button x:Name="btnMenu"
                                 Style="{StaticResource IconBtn}"
                                 Height="30"
+                                AutomationProperties.Name="Menu"
                                 Click="Menu_Click">
                             <TextBlock Text="&#8801;"
                                        Foreground="{DynamicResource SubFg}"
@@ -67,6 +69,7 @@
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal">
                         <Button Style="{StaticResource IconBtn}"
+                                AutomationProperties.Name="Minimize"
                                 Click="Minimize_Click">
                             <TextBlock Text="&#8211;"
                                        FontSize="14"
@@ -77,6 +80,7 @@
                         </Button>
                         <Button Style="{StaticResource IconBtn}"
                                 Margin="2,0,0,0"
+                                AutomationProperties.Name="Close"
                                 Click="Close_Click">
                             <Border Background="#CC3333" CornerRadius="10"
                                     Width="18" Height="18">
@@ -126,13 +130,12 @@
                                Opacity="0.75"/>
 
                     <Grid Grid.Row="2" Margin="14,0,10,10">
-                        <!-- FontSize is adjusted at runtime by txtExpr_SizeChanged
+                        <!-- FontSize is adjusted at runtime by UpdateExprFontSize
                              (32px down to 13px as the expression grows) instead
                              of a fixed MaxHeight, so long expressions shrink to
                              fit rather than wrap off-screen. -->
                         <TextBox x:Name="txtExpr"
                                  FontSize="32" FontWeight="Bold"
-                                 SizeChanged="txtExpr_SizeChanged"
                                  FontFamily="Segoe UI"
                                  Background="Transparent"
                                  BorderThickness="0"
