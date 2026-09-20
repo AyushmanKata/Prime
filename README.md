@@ -1,4 +1,4 @@
-# WinCalc
+# Prime
 
 A fast, native Windows calculator styled after GNOME Calculator.
 Built with C# + WPF on .NET 10. Native, no Electron. The published exe is self-contained, so no .NET install is needed to run it.
@@ -20,7 +20,7 @@ Standalone exe (no .NET install needed on target machine):
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
 ```
 
-Output: `bin/Release/net10.0-windows/win-x64/publish/WinCalc.exe`
+Output: `bin/Release/net10.0-windows/win-x64/publish/Prime.exe`
 
 ## Features
 
@@ -45,8 +45,8 @@ System Default reads `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Pers
 ## File Structure
 
 ```
-WinCalc/
-├── WinCalc.csproj       # .NET 10 WPF project
+Prime/
+├── Prime.csproj       # .NET 10 WPF project
 ├── App.xaml             # Global styles — shared button template + per-variant styles
 ├── App.xaml.cs          # Theme engine (AppTheme enum, ApplyColors, registry check)
 ├── ButtonChrome.cs      # Attached HoverBrush/PressBrush properties for button styles

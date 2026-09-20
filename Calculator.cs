@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
-namespace WinCalc;
+namespace Prime;
 
 /// <summary>One completed calculation: the expression typed and the result produced.</summary>
 public record HistoryEntry(string Expression, string Result);

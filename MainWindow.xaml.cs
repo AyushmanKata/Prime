@@ -4,7 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace WinCalc;
+namespace Prime;
 
 /// <summary>
 /// Code-behind for the calculator window: button-grid construction, keyboard

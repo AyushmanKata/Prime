@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using Microsoft.Win32;
 
-namespace WinCalc;
+namespace Prime;
 
 /// <summary>
 /// App entry point and theme engine. Colors are pushed into

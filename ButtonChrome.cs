@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 
-namespace WinCalc;
+namespace Prime;
 
 /// <summary>
 /// Attached hover/press brush properties shared by the Btn/OpBtn/EqBtn styles
